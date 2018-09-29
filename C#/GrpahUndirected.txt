@@ -1,4 +1,4 @@
-// Реализация неориентированного графа и некоторые методы запроса - Dfs, Bfs, IsPath, PathTo
+// Example of undirected grpah- Dfs, Bfs, IsPath, PathTo
 using System;
 using System.Collections.Generic;
 using System.Linq;
