@@ -1,4 +1,4 @@
-// Отправка смс с сервера
+// Sending sms from server
 procedure TRPSms.SendLimitedSms(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 
   function getUserID(aID: integer): Integer;
