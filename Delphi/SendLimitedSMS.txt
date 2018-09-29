@@ -1,0 +1,84 @@
+// Отправка смс с сервера
+procedure TRPSms.SendLimitedSms(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+
+  function getUserID(aID: integer): Integer;
+  var
+    q: TFdquery;
+  begin
+    try
+      q := TFdquery.Create(nil);
+      with q do
+      begin
+        Connection := FFDConnection;
+        sql.Text := 'SELECT userStatus_id FROM sarafan_db.users where id=:id;';
+        params.ParamValues['id'] := aID;
+        Disconnect();
+        Open();
+        result := FieldByName('userStatus_id').AsInteger;
+        Close;
+      end;
+
+    finally
+      q.Free;
+    end;
+  end;
+
+var
+  s: TSMSC;
+  phone: string;
+  msg: string;
+  postParams: TStringList;
+  d: TDecodePostRequest;
+  c: TCommon;
+begin
+  s := TSMSC.Create;
+  d := TDecodePostRequest.Create(nil);
+  c := TCommon.Create(nil);
+  c.FDConnection := FFDConnection;
+  postParams := TStringList.Create;
+  try
+    try
+      d.DecodePostParamsAnsi(AContext, ARequestInfo, AResponseInfo, postParams);
+      phone := postParams.Values['phone'];
+      msg := TNetEncoding.URL.Decode((postParams.Values['message']));
+      if (phone = '') or (msg = '') then
+      begin
+        TResponses.CodedError(AResponseInfo, 8);
+        exit;
+      end;
+      if not c.isSuchPhoneInDB(phone) then
+      begin
+        TResponses.CodedError(AResponseInfo, 2);
+        exit;
+      end;
+      if (GetHoursSinceLastSMS(c.GetUserID(phone)) < 24) then
+      begin
+        TResponses.CodedError(AResponseInfo, 20);
+        exit;
+      end;
+      if (GetCounSentSms(c.GetUserID(phone)) > 3) then
+      begin
+        TResponses.CodedError(AResponseInfo, 19);
+        exit;
+      end;
+      if (getUserID(c.GetUserID(phone)) = 2) or (getUserID(c.GetUserID(phone)) = 3) then
+      begin
+        SendSmsWithLimitations(c.GetUserID(phone), msg);
+        TResponses.OK(AResponseInfo);
+      end
+      else
+      begin
+        TResponses.CodedError(AResponseInfo, 18);
+        exit;
+      end;
+    except
+      on E: Exception do
+        TResponses.Error(AResponseInfo, e.Message);
+    end;
+  finally
+    s.Free;
+    d.Free;
+    c.Free;
+    postParams.Free;
+  end;
+end;

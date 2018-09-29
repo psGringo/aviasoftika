@@ -1,0 +1,131 @@
+// Получение файла на сервере, декодирование из пост запроса
+
+procedure TRP.ReceiveFileOnServer(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
+
+  function getMaxFileUploadSize: string;
+  var
+    q: TFdquery;
+    db: TDB;
+  begin
+    q := TFdquery.Create(Self);
+    db := Tdb.Create(nil);
+    try
+      with q do
+      begin
+        Connection := db.FDConnection;
+        sql.Text := 'SELECT * FROM sarafan_db.settings where name=''maxFileUploadSize'';';
+        Disconnect();
+        Open();
+        result := FieldByName('value').AsString;
+        Close();
+      end;
+    finally
+      q.Free;
+      db.Free;
+    end;
+  end;
+
+  function InsertFileInDB(aRelWebFilePath: string; aPhone: string): integer;
+  var
+    q: TFdquery;
+    c: TCommon;
+    db: Tdb;
+  begin
+    q := TFdquery.Create(Self);
+    c := TCommon.Create(nil);
+    db := Tdb.Create(nil);
+    c.FDConnection := db.FDConnection;
+    try
+      with q do
+      begin
+        Connection := db.FDConnection;
+        sql.Text := 'INSERT INTO `sarafan_db`.`files` (`relWeblFilePath`, `relWinFilePath`, `users_id`) VALUES (:reWeblFilePath, :reWinFilePath , :users_id);';
+        params.ParamValues['reWeblFilePath'] := aRelWebFilePath;
+        params.ParamValues['reWinFilePath'] := StringReplace(aRelWebFilePath, '/', '\', [rfReplaceAll]);
+        params.ParamValues['users_id'] := c.GetUserID(aPhone);
+        ExecSQL;
+        result := db.GetLastID();
+      end;
+    finally
+      q.Free;
+      c.Free;
+      db.Free;
+    end;
+  end;
+
+var
+  d: TDecodePostRequest;
+  relUploadDir, relWebFilePath: string;
+  postParams: TStringList;
+  fileName: string;
+  a: TStringDynArray;
+  filesSL: TStringList;
+  i: Integer;
+  t: TSendFileOnServerThread;
+  filesDir: string;
+  phone: string;
+  c: Tcommon;
+  db: TDb;
+begin
+  //checks
+  if ARequestInfo.PostStream.Size > getMaxFileUploadSize.ToInteger then // >10 mb
+  begin
+    TResponses.Error(AResponseInfo, 'file more than 10 mb');
+    exit;
+  end;
+  d := TDecodePostRequest.Create(Self);
+  postParams := TStringList.Create;
+  filesSL := TStringList.Create;
+  db := TDb.Create(nil);
+  c := Tcommon.Create(nil);
+  c.FDConnection := db.FDConnection;
+  try
+    try
+      relUploadDir := c.getRelUploadDir + '\' + YearOf(Now).ToString() + '\' + MonthOf(Now).ToString() + '\' + DayOf(Now).ToString();
+      if not TDirectory.Exists(ExtractFilePath(Application.ExeName) + relUploadDir) then
+        TDirectory.CreateDirectory(ExtractFilePath(Application.ExeName) + relUploadDir);
+      a := TDirectory.GetFiles(ExtractFilePath(Application.ExeName) + relUploadDir);
+      //
+      for i := Low(a) to High(a) do
+        filesSL.add(ExtractFileName(a[i]));
+      //
+      d.DecodePostParamsAnsi(AContext, ARequestInfo, AResponseInfo, postParams);
+      phone := postParams.Values['phone'];
+      if phone = '' then
+      begin
+        TResponses.CodedError(AResponseInfo, 1);
+        exit;
+      end;
+      if not c.isSuchPhoneInDB(phone) then
+      begin
+        TResponses.CodedError(AResponseInfo, 2);
+        exit;
+      end;
+      //fileName := TNetEncoding.Base64.Decode(postParams.Values['filename']);
+      fileName := TNetEncoding.URL.Decode(postParams.Values['filename']);
+      if fileName = '' then
+      begin
+        TResponses.CodedError(AResponseInfo, 7);
+        exit;
+      end;
+      fileName := TUniqueName.CreateUniqueNameAddingNumber(filesSL, fileName); // doing this file unique in folder
+      // main work here
+      d.ReceiveFile(AContext, ARequestInfo, AResponseInfo, relUploadDir, fileName);
+      relWebFilePath := StringReplace(relUploadDir, '\', '/', [rfReplaceAll]) + '/' + fileName;
+
+      ResponseSendFileOK(AResponseInfo, InsertFileInDB(relWebFilePath, phone), relWebFilePath);
+    except
+      on E: Exception do
+      begin
+        FDBLogger.LogError(e.Message);
+        TResponses.Error(AResponseInfo, e.Message);
+      end;
+    end;
+  finally
+    d.Free;
+    postParams.Free;
+    filesSL.Free;
+    c.Free;
+    db.Free;
+  end;
+end;
