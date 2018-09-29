@@ -1,4 +1,4 @@
-// Пример обработки post запроса на сервере idHTTPServer
+// post request handling of idHTTPServer example
 
 procedure TDecodePostRequest.ReceiveFile(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo; dir, FileNameOnServer: string);
 const
@@ -21,7 +21,7 @@ begin
   begin
    // if(ARequestInfo.Document = '/index.php')  then
     begin
-      if (Pos('multipart/form-data', LowerCase(ARequestInfo.ContentType)) > 0) and     // далее идёт обработка multipart
+      if (Pos('multipart/form-data', LowerCase(ARequestInfo.ContentType)) > 0) and     // Г¤Г Г«ГҐГҐ ГЁГ¤ВёГІ Г®ГЎГ°Г ГЎГ®ГІГЄГ  multipart
         (Pos('boundary', LowerCase(ARequestInfo.ContentType)) > 0) then
       begin
         Header := TStringList.Create;
