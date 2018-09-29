@@ -1,4 +1,4 @@
-// Получение файла на сервере, декодирование из пост запроса
+// Decoding post request
 
 procedure TRP.ReceiveFileOnServer(AContext: TIdContext; ARequestInfo: TIdHTTPRequestInfo; AResponseInfo: TIdHTTPResponseInfo);
 
